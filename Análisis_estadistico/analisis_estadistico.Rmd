@@ -1,0 +1,908 @@
+---
+title: "Análisis estadístico de la expresión relativa de genes en el intestino de juveniles de trucha arcoiris"
+subtitle: "Universidad de Murcia - Máster universitario en bioinformática"
+author: "María Belén Barquero Martínez"
+linkcolor: blue
+urlcolor: blue
+date: '\today'
+bibliography: bibliografia.bib
+output: 
+  html_document:
+    fig_caption: yes
+    df_print: paged
+    highlight: kate
+    number_sections: yes
+    theme: spacelab
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE, warning=FALSE}
+# Escritorio de trabajo
+setwd("/home/alumno02/tfm/")
+```
+
+# Introducción
+
+A continuación se va a presentar el análisis estadístico de los datos recogidos sobre la expresión relativa de los genes IgM, IL-1B, IgT, IgD, prdm1a-2, prdm1a-1, prdm1c-2, prdm1c-1, IRF4 y BALM de ejemplares de trucha arcoiris (*Oncorhynchus mykiss*) tras la suministración de dietas suplementadas con distintas concentraciones de metionina.
+
+Los ejemplares de trucha arcoiris se encuentran agrupados en tres grupos experimentales: el control o MET1, suplementado con un 1% de metionina en la dieta; el grupo MET2, suplementado con un 2% de metionina en la dieta y el grupo MET3, suplementado con un 3% de metionina en la dieta. Cada uno de estos grupos experimentales cuenta con 7 ejemplares o muestras de trucha, teniendo un total de 21 muestras.
+
+Tras las diversas técnicas moleculares realizadas, que van desde la extracción de muestras de intestino de los ejemplares hasta la extracción del ARN, tratamiento con ADNasas hasta la síntesis del ADNc, PCR en tiempo real y su procesamiento, se obtienen los datos de la expresión relativa de estos genes siguiendo el método expuesto por @pfaffl2001new. Con estos datos se va a proceder a realizar este análisis estadístico.
+
+# Objetivos
+
+El principal objetivo de este análisis estadístico es **determinar si en el intestino de los peces hay diferencias de expresión de los genes dependiendo de la dieta experimental con la que hayan sido alimentados**, y con ello, comprobar si la suplementación con metionina es capaz de estimular genes relacionados con el sistema inmunológico que confieran a las truchas arcoiris una mayor defensa ante patógenos.
+
+# Datos
+Los datos empleados para este análisis estadístico se pueden encontrar alojados en este repositorio con el nombre de *datos_expresion_brutos.xlsx*. Estos datos corresponden a la expresión relativa de los genes aplicando la fórmula expuesta por @pfaffl2001new a través de la expresión de los genes.
+
+Los datos a partir de los cuales se ha calculado la expresión relativa de los genes y que corresponden a la expresión de los genes arrojada tras las PCR a tiempo real se puede encontrar igualmente alojado en este repositorio con el nombre de 
+
+# Información de naturaleza exploratoria de los datos
+
+Se va a comenzar dicho análisis estadístico haciendo una pequeña exploración principal de los datos.
+Se van a cargar los datos y se van a exponer.
+
+```{r, include=FALSE, warning=FALSE}
+.libPaths("/home/alumno02/R/x86_64-pc-linux-gnu-library/4.0")
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(dplyr)
+library(rstatix)
+library(readxl)
+library(stringr)
+library(car)
+library(RColorBrewer)
+library(scales)
+library(tidyverse)
+library(ggpubr)
+library(gridExtra)
+library(plyr)
+
+knitr.table.format = "html"
+```
+
+## Exploración principal de los datos
+
+```{r, warning=FALSE}
+# Visualización de los datos
+datos <- readxl::read_excel("datos_expresion_brutos.xlsx", 
+     col_types = c("text", "numeric", "numeric", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "numeric", "numeric", "numeric", 
+         "numeric", "numeric"))
+datos
+```
+
+```{r}
+# Exploración principal de los datos
+str(datos)
+```
+
+```{r}
+# Número de filas y de columnas en los datos
+dim(datos)
+```
+
+Como se puede observar, se cuenta con 21 filas u observaciones y con 12 columnas o variables. Estas variables se dividen en una primera que corresponde al número de muestras, la segunda que corresponde al tipo de tratamiento/dieta que recibe la muestra y las diez restantes que hacen referencia a los nombres de los genes que se estudian.
+
+Los grupos experimentales cuentan con 7 peces o muestras cada uno, por lo que de la muestra 1 a la 7 estaríamos hablando de la dieta experimental control o MET1 (Tratamiento 1); de la 8 a la 14 de la dieta experimental MET2 (Tratamiento 2) y de la 15 a la 21 de la dieta experimental MET3 (Tratamiento 3).
+
+## Tipos a los que corresponden los datos presentes en el dataset
+
+A continuación se van a mostrar los tipos de datos con los que contamos en el estudio, ya que conocer esta información es importante para saber cómo proceder en el análisis.
+
+```{r, echo = FALSE}
+# Clases del conjuntos de datos
+tipos <- table(sapply(datos, class))
+knitr::kable(tipos, caption = "Clase de datos de nuestro conjunto de datos", col.names = c("Tipo de dato", "Frecuencia")) %>%
+  kable_styling(bootstrap_options = "condensed")
+```
+
+Como se puede observar se cuenta con 11 variables numéricas y una variable tipo *character* o de caracteres. La variable tipo character hace refencia a la primera columna, que es la que recoge el número de las muestras, y las once restantes, numéricas, a la información de la expresión relativa de los genes y una segunda columna que hace referencia al tipo de dieta experimental que se le suministró a cada una de las muestras, siendo "1" referente a la dieta MET1, "2" a MET2 y "3" a MET3.
+
+Se determina también que no hay que hacer ningún cambio sustancial en los datos.
+
+## Escalado de los datos y revisión de outliers
+
+A continuación se va a proceder a **comprobar si los datos se encuentran centrados/escalados y a revisar la presencia de _outliers_**.
+
+Es un buen hábito revisar si los datos se encuentran centrados y escalados para poder centrarlos si el tipo de análisis lo requiere. En este caso, al tratarse de genes diferentes y cuyas expresiones pueden variar mucho numéricamente, **no se considera pertinente realizar un centrado y escalado de los datos en caso de que se encuentre que presentan esta condición**, pero sí que será necesaria la eliminación de los *outliers*, porque siempre cabe la posibilidad en casos de experimentación *in vivo* de que alguno de los animales implicados presente una expresión menor o mayor a la media y estos datos alejados pueden hacer que el análisis no sera riguroso.
+
+Se va a visualizar a continuación cuál es el rango en el que se mueven cada uno de los datos referentes a cada uno de los genes y se va a comprobar la presencia de outliers o valores fuera de rango:
+
+```{r}
+#Boxplot de la expresión relativa de los genes
+boxplotgenes <- boxplot(datos[,3:12], xlab="Genes", ylab="Valores", main="Diagrama de cajas de expresión relativa de los genes", col="lightblue", las = 2, cex.lab=0.8, cex.axis=0.6, font = 2)
+```
+
+Como se puede observar, destaca la presencia de *outliers* o valores que se escapan mucho de la media en todos los casos menos en el gen IRF4, destacando los presentes en IgM. 
+
+Se puede comprobar que los rangos de expresión relativa de los genes varían mucho entre ellos, notándose una clara diferencia entre la expresión de IgM (entorno a valores de 0.2/0.5) y el resto de los genes, que se quedan en el rango del cero. 
+
+A continuación se va a proceder a la eliminación de esos *ourliers*, que son los valores fuera de rango que hay en los datos, para que la revisión estadística no se desvíe por estos valores que no son representativos.
+
+### Eliminación de *outliers*
+
+Se presentan a continuación los *outliers* que hay en los datos brutos:
+
+```{r}
+#Outliers
+boxplotgenes$out
+```
+
+
+Se va a proceder a eliminar estos valores fuera de rango:
+
+```{r}
+# Eliminación de los ourliers
+datos_NOigm <- datos[!(datos$IgM %in% boxplotgenes$out),]
+datos_NOile1 <- datos_NOigm[!(datos_NOigm$IL1B %in% boxplotgenes$out),]
+datos_NOigt <- datos_NOile1[!(datos_NOile1$IgT %in% boxplotgenes$out),]
+datos_NOigd <- datos_NOigt[!(datos_NOigt$IgD %in% boxplotgenes$out),]
+datos_NOblimp3 <- datos_NOigd[!(datos_NOigd$`prdm1a-2` %in% boxplotgenes$out),]
+datos_NOblimp4 <- datos_NOblimp3[!(datos_NOblimp3$`prdm1a-1` %in% boxplotgenes$out),]
+datos_NOblimp5 <- datos_NOblimp4[!(datos_NOblimp4$`prdm1c-2` %in% boxplotgenes$out),]
+datos_NOblimp6 <- datos_NOblimp5[!(datos_NOblimp5$`prdm1c-1` %in% boxplotgenes$out),]
+datos_NOirf4 <- datos_NOblimp6[!(datos_NOblimp6$IRF4 %in% boxplotgenes$out),]
+datos_NObalm <- datos_NOirf4[!(datos_NOirf4$BALM %in% boxplotgenes$out),]
+```
+
+Para comprobar que los *outliers* se han retirado de forma correcta se va a presentar de nuevo el boxplot de la expresión relativa de los genes, para confirmar la retirada de estos valores:
+
+```{r}
+# Boxplot sin outliers
+no_outliers <- boxplot(datos_NObalm[,3:12], xlab="Genes", ylab="Valores", main="Diagrama de cajas de expresión relativa de los genes", col="lightblue", las = 2, cex.lab=0.8, cex.axis=0.6, font = 2)
+```
+
+
+Como se puede apreciar se han eliminado todos los *ourliers* o valores fuera de rango que estaban presentes anteriormente en los datos. Por ejemplo, se puede apreciar que aquellos presentes en IgM ya no están.
+
+Debido a que ha cambiado la media y la mediana de los datos para cada uno de los genes, en algunos genes se puede ver la presencia de nuevos *outliers*, pero estos no deben ser eliminados ya que se han eliminado aquellos que estaban en los datos brutos, que son los que impedían un riguroso análisis estadístico.
+
+## Comprobación de valores nulos
+
+A continuación se va a proceder a **comprobar si en nuestro conjunto de datos hay valores nulos o inadecuados para el análisis posterior**. Los tipos de datos no válidos son: NA (no disponibles), NaN (valores desconocidos), Inf (valores infinitos) o NULL (valores nulos).
+
+```{r, echo=FALSE}
+datos_sin_outliers <- datos_NObalm
+```
+
+```{r}
+# Comprobación de valores nulos en los datos
+no_validas <- table(apply(datos_sin_outliers, 2, function(x) any(is.na(x) | is.nan(x) | is.infinite(x) | is.null(x))))
+```
+
+```{r, echo = FALSE}
+# Tabla de las columnas con valores no aptos para el análisis
+knitr::kable(no_validas, caption = "Columnas con valores no numéricos o ausentes",  col.names = c("Tipo", "Frecuencia")) %>%
+  kable_styling(bootstrap_options = "condensed")
+```
+Como se puede apreciar, de las diez columnas, una de ellas presenta valores nulos que hay que eliminar.
+A continuación se procede con la eliminación de dichos valores nulos y la comprobación de su retirada del conjunto de datos.
+
+```{r}
+# Eliminación de valores nulos
+Datos <- na.omit(datos_sin_outliers)
+```
+
+A continuación se va a comprobar que se han eliminado los datos nulos de forma correcta:
+
+```{r, echo = FALSE}
+# Comprobación de valores nulos en los datos
+no_validas_comprobacion <- table(apply(Datos, 2, function(x) any(is.na(x) | is.nan(x) | is.infinite(x) | is.null(x))))
+```
+
+```{r, echo = FALSE}
+# Tabla de las columnas con valores no aptos para el análisis
+knitr::kable(no_validas_comprobacion, caption = "Columnas con valores no numéricos o ausentes",  col.names = c("Tipo", "Frecuencia")) %>%
+  kable_styling(bootstrap_options = "condensed")
+```
+
+Como se puede apreciar, se han eliminado los valores nulos de la columna y ya se puede proceder a utilizar estos datos para realizar el análisis estadístico.
+
+# Normalidad de los datos
+
+Para realizar el análisis estadístico propiamente dicho que nos permita comprobar si las diferencias entre las expresiones relativas de cada uno de los genes en las dietas experimentales son significativas, necesitamos **comprobar la normalidad de los datos y la homogeneidad de las varianzas** para poder emplear un test paramétrico. De no ser así y no cumplirse o bien la normalidad de los datos o la homogeneidad de las varianzas, habría que aplicar un test no paramétrico.
+
+## Test de Shapiro-Wilk
+
+El test de Shapiro-Wilk se emplea para contrastar la normalidad de un conjunto de datos. Se plantea como hipótesis nula u H0 que la muestra proviene de una población normalmente distribuida, mientras que la hipótesis alternativa o H1 plantea que los datos no vienen de una distribución normal. Para el caso de nuestro estudio se emplea este test de normalidad porque es el indicado cuando el número de muestras no es superior a 50 (@hanusz2016shapiro).
+
+Se procede a continuación a aplicar dicho test para cada uno de los genes del estudio y comprobar si se puede asumir o no la normalidad de los datos:
+
+```{r}
+# Test de Shapiro-Wilk
+apply(Datos[,3:12], MARGIN=2, shapiro.test)
+```
+
+**Sólo se puede asumir la normalidad de los datos de la expresión relativa de los genes en el caso del gen IgD, prdm1a-2, prdm1c-1 y prdm1c-2**, ya que para estos dos casos concretos se obtiene un p-valor superior a 0.05, no se rechaza la hipótesis nula (H0) y se puede asumir entonces que los datos de esos genes son normales. 
+
+**En todos los demás casos se rechaza la hipótesis nula y se asume que NO hay normalidad en los datos**.
+
+## Histograma y curva normal
+
+A continuación se van a representar los distintos datos de expresión relativa de cada uno de los genes mediante histogramas, haciendo uso también de una curva de distribución normal con la misma media y desviación estándar que muestran los datos.
+
+
+```{r, echo = FALSE, warning=FALSE}
+histIGM <- ggplot(data = Datos, aes(x = IgM)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$IgM),
+                            sd = sd(Datos$IgM))) +
+  ggtitle("IgM") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+histIL1B <- ggplot(data = Datos, aes(x = IL1B)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$IL1B),
+                            sd = sd(Datos$IL1B))) +
+  ggtitle("IL-1B") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+grid.arrange(histIGM, histIL1B, ncol = 2, widths = c(1,1))
+```
+```{r, echo = FALSE, warning=FALSE}
+histIGT <- ggplot(data = Datos, aes(x = IgT)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$IgT),
+                            sd = sd(Datos$IgT))) +
+  ggtitle("IgT") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+histIGD <- ggplot(data = Datos, aes(x = IgD)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$IgD),
+                            sd = sd(Datos$IgD))) +
+  ggtitle("IgD") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+grid.arrange(histIGT, histIGD, ncol = 2, widths = c(1,1))
+```
+
+```{r, echo = FALSE, warning=FALSE}
+histBLIMP3 <- ggplot(data = Datos, aes(x = `prdm1a-2`)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$`prdm1a-2`),
+                            sd = sd(Datos$`prdm1a-2`))) +
+  ggtitle("prdm1a-2") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+histBLIMP4 <- ggplot(data = Datos, aes(x = `prdm1a-1`)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$`prdm1a-1`),
+                            sd = sd(Datos$`prdm1a-1`))) +
+  ggtitle("prdm1a-1") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+grid.arrange(histBLIMP3, histBLIMP4, ncol = 2, widths = c(1,1))
+```
+
+```{r, echo = FALSE, warning=FALSE}
+histBlimp5 <- ggplot(data = Datos, aes(x = `prdm1c-2`)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$`prdm1c-2`),
+                            sd = sd(Datos$`prdm1c-2`))) +
+  ggtitle("`prdm1c-2`") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+histBLIMP6 <- ggplot(data = Datos, aes(x = `prdm1c-1`)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$`prdm1c-1`),
+                            sd = sd(Datos$`prdm1c-1`))) +
+  ggtitle("`prdm1c-1`") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+grid.arrange(histBlimp5, histBLIMP6, ncol = 2, widths = c(1,1))
+```
+
+```{r, echo = FALSE, warning=FALSE}
+histIRF4 <- ggplot(data = Datos, aes(x = IRF4)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$IRF4),
+                            sd = sd(Datos$IRF4))) +
+  ggtitle("IRF4") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+histBALM <- ggplot(data = Datos, aes(x = BALM)) +
+  geom_histogram(aes(y = ..density.., fill = ..count..), colour="lightblue", fill="lightblue") +
+  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+  stat_function(fun = dnorm, colour = "black",
+                args = list(mean = mean(Datos$BALM),
+                            sd = sd(Datos$BALM))) +
+  ggtitle("BALM") +
+  labs(y="densidad") +
+  theme(axis.title.x = element_text(vjust=-0.5, size=rel(1))) +
+  theme(axis.title.y = element_text(vjust=-0.5, size=rel(1))) +
+  theme_bw() +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank()) 
+
+grid.arrange(histIRF4, histBALM, ncol = 2, widths = c(1,1))
+```
+
+Como se puede apreciar en estas representaciones, la curva de normalidad sólo toma la distribución propia de la normalidad en el caso del histograma de los datos de IgD, prdm1a-2, prdm1c-1 y prdm1c-2, por lo que, además de la información que nos ofrece el test, concluimos visualmente que en los demás genes no se puede asumir normalidad.
+
+# Homogeneidad de las varianzas
+
+Otra de las variables que hay que tener en cuenta al realizar un test paramétrico o no paramétrico es la **comprobación de la homogeneidad de las varianzas**. Este supuesto, también conocido como supuesto de homocedasticidad, considera que la varianza es constante (no varía) en los diferentes niveles de un factor, es decir, entre diferentes grupos.
+
+A continuación se va a aplicar un test que permita comprobar si en nuestros datos contamos con homogeneidad de las varianzas o no:
+
+## Test de Levene
+
+El test de Levenne se aplica para contrastar la homogeneidad de las varianzas. Se plantea como hipótesis nula u H0 que la muestra proviene de una población con homogeneidad de varianzas, mientras que la hipótesis alternativa o H1 plantea que los datos no vienen de una distribución homogénea de varianzas. Se va a aplicar este test debido a que no contamos con normalidad en nuestros datos y este test no es tan sensible a esta condición como otros (@yitnosumarto1986levene).
+
+Se procede a continuación a aplicar dicho test para cada uno de los genes del estudio y comprobar si se puede asumir o no la homogeneidad de las varianzas en los datos:
+
+```{r, warning=FALSE}
+# Test de Levene
+apply(Datos[,3:12], MARGIN=2, group=Datos$Tratamiento, leveneTest)
+```
+
+Como se puede apreciar, **en todos los casos se acepta la H0 y se asume que hay homogeneidad de las varianzas para todos los genes**.
+
+# Test no paramétrico
+
+Al no presentarse normalidad en los datos del estudio se procede a aplicar un test no paramétrico. Este test no paramétrico se aplica debido a que para aplicarse uno paramétrico se tiene que disponer de normalidad en los datos y de homogeneidad de las varianzas, y como en nuestros datos no podemos dar por buenos dichos sucesos, se pasa a realizar esta opción no paramétrica.
+
+**Este test NO paramétrico se va a emplear para comprobar si la expresión relativa de cada uno de los genes en el intestino de las muestras de trucha arcoiris dependiendo de la dieta experimental correspondiente es significativa**. Para ello se va a enfrentar, dentro del mismo gen, las tres dietas o grupos experimentales entre sí **para determinar si existen diferencias significativas entre las dietas experimentales para cada uno de los genes estudiados**.
+
+## Prueba Kruskal-Wallis
+
+La **prueba de Kruskal Wallis** se considera la alternativa no paramétrica al ANOVA unidireccional, y una extensión de la prueba U de Mann-Whitney que permite la comparación de **más de dos grupos independientes**.
+En el caso de nuestro estudio se asume la independencia de las variables porque los genes NO están relacionados entre sí (@mckight2010kruskal).
+
+Al ser no paramétrica, la prueba no asume que los datos provienen de una distribución particular. **La prueba de Kruskal Wallis te dirá si hay una diferencia significativa entre los grupos**. Sin embargo, no dirá qué grupos son diferentes. Es por esto que posteriormente tendremos que aplicar una **comparación por pares** (*Pairwise comparisons*) en el caso de que se obtenga que algún gen sea significativo para comprobar cuáles de los tratamientos dentro de ese gen lo son y cuales no.
+
+A continuación se muestra el resultado de la aplicación del test de *Kruskal Wallis* para todos los genes en los tres tratamientos experimentales:
+
+```{r, echo = FALSE, warning=FALSE}
+# Test no paramétrico Kruskal Wallis para todos los genes
+# IgM
+compare_means(IgM ~ Tratamiento, data = Datos, method = "kruskal.test")
+# IL-1B
+compare_means(IL1B ~ Tratamiento, data = Datos, method = "kruskal.test")
+# IgT
+compare_means(IgT ~ Tratamiento, data = Datos, method = "kruskal.test")
+# IgD
+compare_means(IgD ~ Tratamiento, data = Datos, method = "kruskal.test")
+# Blimp3
+compare_means(`prdm1a-2` ~ Tratamiento, data = Datos, method = "kruskal.test")
+# Blimp4
+compare_means(`prdm1a-1` ~ Tratamiento, data = Datos, method = "kruskal.test")
+# Blimp5
+compare_means(`prdm1c-2` ~ Tratamiento, data = Datos, method = "kruskal.test")
+# Blimp6
+compare_means(`prdm1c-1` ~ Tratamiento, data = Datos, method = "kruskal.test")
+# IRF4
+compare_means(IRF4 ~ Tratamiento, data = Datos, method = "kruskal.test")
+# BLMA
+compare_means(BALM ~ Tratamiento, data = Datos, method = "kruskal.test")
+```
+
+Como se puede apreciar por los resultados anteriormente expuestos, solo se rechaza la H0 para el caso de IgM, por lo que se considera que para el gen IgM **existen diferencias entre las dietas experimentales**.
+
+Para saber para cada gen dónde se encuentran estas diferencias se procede a realizar una **comparación por pares (*Pairwise comparison*)** como se ha comentado con anterioridad, de forma que queden enfrentadas las tres dietas experimentales una a una con todas las posibilidades, con el objetivo de comprobar para el caso de los genes significativos cuáles de las dietas experimentales son las significativas con respecto a otras.
+
+Se utiliza el test no paramétrico de Wilcoxon, y en este caso sólo se realizará para el gen IgM, que es el que ha dado un resultado significativo para el test no paramétrico de Kruskal-Wallis (p-valor menor a 0.05).
+
+```{r}
+# Pairwise comparación
+# Para comprobar dónde están las diferencias significativas si hay más de dos grupos
+compare_means(IgM ~ Tratamiento,  data = Datos)
+```
+
+
+**Se observó que la expresión del gen IgM aumentó en el intestino de los peces alimentados con la dieta MET3 (suplementada con un 3% de metionina) con respecto a los valores obtenidos en los peces alimentados con la dieta MET2. Sin embargo, la expresión de ese gen no mostró variaciones en la expresión en los peces alimentados con la dieta control (MET1)**, tal y como se puede apreciar tras hacer la comparación por pares.
+
+# Representación gráfica de los resultados
+
+Podemos representar nuestros resultados con histogramas de barras o mediante *boxplots* (diagrama de cajas y bigotes) indicando si existen o no diferencias significativas entre las tres dietas experimentales.
+
+## Representación gráfica con *boxplots*
+
+Con ayuda del paquete `ggplot2` y sus extensiones, como `ggpubr`, se va a proceder a mostrar los resultados mediante diagramas de cajas y bigotes, mostrándose su mediana, sus cuartiles y sus valores mínimos y máximos. 
+
+Además de esto **se incorporará en el gráfico la comparación dos a dos de las dietas experimentales, de forma que se pueda diferenciar si el resultado del test no paramétrico realizado entre las dietas es o no significativo y si existen diferencias significativas entre esos grupos. Se representará con un "ns" los resultados no significativos, mientras que con un asterisco "*" los resultados significativos**.
+
+A continuación se muestran dichas representaciones:
+
+### IgM
+
+```{r, echo = FALSE, warning=FALSE}
+# Visualizamos la comparación con boxplot
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+igm <- ggboxplot(Datos, x = "Tratamiento", y = "IgM", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("IgM") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.8) #label.y = c(0.27, 0.32, 0.37)
+igm
+```
+
+Como se puede apreciar, **para el caso de las dietas experimentales 2 y 3 (MET2 y MET3) se encuentran diferencias significativas en el gen IgM**. 
+
+### IgT
+
+```{r, echo = FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+igt <- ggboxplot(Datos, x = "Tratamiento", y = "IgT", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("IgT") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0, 0.05, Inf), 
+                                        symbols = c("*", "ns")), bracket.size = 0.8) 
+igt
+```
+
+### IgD
+
+```{r, echo = FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+igd <- ggboxplot(Datos, x = "Tratamiento", y = "IgD", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("IgD") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+ 
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0, 0.05, Inf), 
+                                        symbols = c("*", "ns")), bracket.size = 0.8) 
+igd
+```
+
+### IL-1B
+
+```{r, echo = FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+il1b <- ggboxplot(Datos, x = "Tratamiento", y = "IL1B", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("IL-1β") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0, 0.05, Inf), 
+                                        symbols = c("*", "ns")), bracket.size = 0.8)  
+il1b
+```
+
+### prdm1a-1
+
+```{r, echo = FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+blimp4 <- ggboxplot(Datos, x = "Tratamiento", y = "prdm1a-1", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("prdm1a-1") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+ 
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0, 0.05, Inf), 
+                                        symbols = c("*", "ns")), bracket.size = 0.8) 
+blimp4
+```
+
+### prdm1a-2
+
+```{r, echo = FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+blimp3 <- ggboxplot(Datos, x = "Tratamiento", y = "prdm1a-2", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("prdm1a-2") +
+  ylab("Expresión relativa") + 
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+ 
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0, 0.05, Inf), 
+                                        symbols = c("*", "ns")), bracket.size = 0.8) 
+blimp3
+```
+
+### prdm1c-1
+
+```{r, echo = FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+blimp6 <- ggboxplot(Datos, x = "Tratamiento", y = "prdm1c-1", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("prdm1c-1") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+ 
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0, 0.05, Inf), 
+                                        symbols = c("*", "ns")), bracket.size = 0.8) 
+blimp6
+```
+
+### prdm1c-2
+
+```{r, echo = FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+blimp5 <- ggboxplot(Datos, x = "Tratamiento", y = "prdm1c-2", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("prdm1c-2") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+ 
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0, 0.05, Inf), 
+                                        symbols = c("*", "ns")), bracket.size = 0.8) 
+blimp5
+```
+
+### IRF4
+
+```{r, echo = FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+irf4 <- ggboxplot(Datos, x = "Tratamiento", y = "IRF4", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("IRF4") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+ 
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0, 0.05, Inf), 
+                                        symbols = c("*", "ns")), bracket.size = 0.8) 
+irf4
+```
+
+### BALM
+
+```{r, echo = FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+balm <- ggboxplot(Datos, x = "Tratamiento", y = "BALM", fill="Tratamiento", outlier.shape = NA, width = 0.4) +
+  ggtitle("BALM") +
+  ylab("Expresión relativa del gen") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1)), panel.grid = element_blank(), legend.position='none') +
+  font("title", color = "black", face = "bold") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+ 
+  stat_compare_means(comparisons = my_comparisons, symnum.args = list(cutpoints = c(0, 0.05, Inf), 
+                                        symbols = c("*", "ns")), bracket.size = 0.8) 
+balm
+```
+
+## Representación gráfica con *barplots* 
+
+Con ayuda del paquete `ggplot2` y sus extensiones, como `ggbarplot`, se va a proceder a mostrar los resultados mediante histogramas o diagramas de barras (*barplots*), mostrándose la media de expresión relativa de los genes para cada dieta experimental en cada uno de los genes.
+
+Además de esto **se incorporará en el gráfico la comparación dos a dos de las dietas experimentales, de forma que se pueda diferenciar si el resultado del test no paramétrico realizado entre las dietas es o no significativo y si existen diferencias significativas entre esos grupos. Se representará con un "ns" los resultados no significativos, mientras que con un asterisco "*" los resultados significativos**.
+
+A continuación se muestran dichas representaciones:
+
+### IgM
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+barigm <- ggbarplot(Datos, x = "Tratamiento", y = "IgM", add = "mean_se", fill="Tratamiento", ylim=c(0,0.5), width = 0.4) +
+  ggtitle("IgM") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.21, 0.26, 0.31), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+barigm
+```
+
+Como se puede apreciar, **para el caso de las dietas experimentales 2 y 3 (MET2 y MET3) se encuentran diferencias significativas en el gen IgM**. 
+
+### IgT
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+barigt <- ggbarplot(Datos, x = "Tratamiento", y = "IgT", add = "mean_se", fill="Tratamiento", ylim=c(0,0.0100), width = 0.4) +
+  ggtitle("IgT") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.0029, 0.0054, 0.0065), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+barigt
+```
+
+### IgD
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+barigd <- ggbarplot(Datos, x = "Tratamiento", y = "IgD", add = "mean_se", fill="Tratamiento", ylim=c(0,0.00050), width = 0.4) +
+  ggtitle("IgD") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.00024, 0.00030, 0.00036), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+barigd
+```
+
+### IL-1B
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+baril1b <- ggbarplot(Datos, x = "Tratamiento", y = "IL1B", add = "mean_se", fill="Tratamiento", ylim=c(0,0.00150), width = 0.4) + 
+  ggtitle("IL-1β") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.00080, 0.00097, 0.00115), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+baril1b
+```
+
+### prdm1a-1
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+bar1a1 <- ggbarplot(Datos, x = "Tratamiento", y = "prdm1a-1", add = "mean_se", fill="Tratamiento", ylim=c(0,0.000100), width = 0.4) + 
+  ggtitle("prdm1a-1") + 
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.000032, 0.000045, 0.000057), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+bar1a1
+```
+
+### prdm1a-2
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+bar1a2 <- ggbarplot(Datos, x = "Tratamiento", y = "prdm1a-2", add = "mean_se", fill="Tratamiento", ylim=c(0,0.0010), width = 0.4) + 
+  ggtitle("prdm1a-2") + 
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.00047, 0.00060, 0.00072), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+bar1a2
+```
+
+### prdm1c-1
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+bar1c1 <- ggbarplot(Datos, x = "Tratamiento", y = "prdm1c-1", add = "mean_se", fill="Tratamiento", ylim=c(0,0.00050), width = 0.4) + 
+  ggtitle("prdm1c-1") + 
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.00020, 0.00027, 0.00033), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+bar1c1
+```
+
+### prdm1c-2
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+bar1c2 <- ggbarplot(Datos, x = "Tratamiento", y = "prdm1c-2", add = "mean_se", fill="Tratamiento", ylim=c(0,0.00150), width = 0.4) + 
+  ggtitle("prdm1c-2") + 
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.00071, 0.00090, 0.00109), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+bar1c2
+```
+
+### IRF4
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+barirf4 <- ggbarplot(Datos, x = "Tratamiento", y = "IRF4", add = "mean_se", fill="Tratamiento", ylim=c(0,0.0100), width = 0.4) + 
+  ggtitle("IRF4") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.0056, 0.0069, 0.0082), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+barirf4
+```
+
+### BALM
+
+```{r, echo=FALSE, warning=FALSE}
+my_comparisons <- list( c("1", "2"), c("2", "3"), c("1", "3"))
+barbalm <- ggbarplot(Datos, x = "Tratamiento", y = "BALM", add = "mean_se", fill="Tratamiento", ylim=c(0,0.000200), width = 0.4) + 
+  ggtitle("BALM") +
+  ylab("Expresión relativa") +
+  xlab("Dietas experimentales") +
+  theme(plot.title=element_text(hjust=0.5, size=rel(1), face = "bold"), panel.grid = element_blank(), legend.position='none') +
+  theme(axis.text.x=element_text(colour = "grey17")) +
+  theme(axis.text.y=element_text(colour = "grey17")) +
+  theme(axis.title.x=element_text(size=13)) +
+  theme(axis.title.y=element_text(size=13)) +
+  font("title", color = "black") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(breaks=c("1", "2", "3"), labels=c("MET1", "MET2", "MET3")) +
+  scale_fill_manual(breaks = c("1", "2", "3"), 
+                      values=c("#CDF0FF", "#73D7FF", "#00ABF0"))+
+  stat_compare_means(comparisons = my_comparisons, label.y = c(0.000115, 0.000140, 0.000165), symnum.args = list(cutpoints = c(0,0.05, Inf), symbols = c("✱", "ns")), bracket.size = 0.6)
+barbalm
+```
+
+# Resultados
+
+Los resultados obtenidos tras el análisis estadístico se pueden observar en los *boxplots* y *barplots* expuestos anteriormente. Se representa mediante diagramas de cajas y bigotes e histogramas, para cada gen, la media de su expresión relativa en el intestino para cada una de las dietas experimentales, así como también se muestra en cada uno de los genes si las dietas presenta diferencias significativos al compararlas.
+
+* Se observó que la expresión del gen IgM aumentó en el intestino de los peces alimentados con la dieta MET3 (suplementada con un 3 % de metionina) con respecto a los valores obtenidos en los peces alimentados con la dieta MET2. Sin embargo, la expresión de ese gen no mostró variaciones en la expresión en los peces alimentados con la dieta control (MET1).
+
+* En el caso de la expresión de los genes IgT, IgD, IL-1B, IRF4, BALM, prdm1a-1, prdm1a-2, prdm1c-1 y prdm1c-2 estos genes no mostraron variaciones en el intestino de los peces alimentados con las tres dietas experimentales.
+
+# Conclusiones
+
+* La suplementación con metionina en la dieta al 3% en los especímenes de trucha arcoiris en este estudio ha mostrado un aumento de expresión del gen IgM, que es la inmunoglobulina más abundante en los peces e implicada en el sistema inmune innato, ya que se encarga de la fijación del complemento, opsonización y activación de la respuesta citotóxica, por lo que esta suplementación en la dieta trae consigo una mejora relativa de la inmunidad innata de los peces.
+
+* Para los juveniles de trucha arcoiris existe una correlación positiva entre el incremento de la expresión y regulación de genes inmunológicos como es la IgM y la magnitud de la expresión y la respuesta que ofrecen ante ella @evenhuis2012modulation, por lo que *la dieta suplementada con metionina al 3% trae consigo una mejor respuesta de los juveniles de trucha arcoiris ante patógenos que las otras dietas experimentales*.
+
+# Bibliografía
+
+

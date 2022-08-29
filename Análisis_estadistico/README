@@ -1,0 +1,12 @@
+En esta carpeta se puede encontrar la información relacionada con el ANÁLISIS ESTADÍSTICO realizado en el trabajo de fin de máster "Evaluación de la respuesta inmunitariade la trucha arcoiris (Oncorhynchus mykiss) alimentadas con dietas suplementadas con metionina"
+Dicho análisis estadístico se realizó usando la expresión relativa de unos genes de interés expresados en el intestino de las muestras de trucha arcoiris (Oncorhynchus mykiss). La información de dichos genes de interés se puede encontrar en los archivos analisis_estadistico.Rmd o analisis_estadistico.html.
+El OBJETIVO de este análisis estadístico es determinar si en el intestino de los peces hay diferencias de expresión de los genes dependiendo de la dieta experimental con la que hayan sido alimentados, y con ello, comprobar si la suplementación con metionina es capaz de estimular genes relacionados con el sistema inmunológico que confieran a las truchas arcoiris una mayor defensa ante patógenos.
+
+Los archivos que se pueden encontrar en esta carpeta son los siguientes:
+- analisis_estadistico.Rmd = código RMarkdown del análisis estadístico de la expresión relativa de los genes expresados en el intestino de las muestras.
+- analisis_estadistico.html = código en formato html del RMarkdown del análisis estadístico. Recomiendo su visualización por ser más agradable a la vista que el código Rmd.
+PARA VISUALIZAR DICHO HTML IR AL LINK = https://htmlpreview.github.io/?https://github.com/mariabelen-bm/TFM-/blob/main/An%C3%A1lisis_estad%C3%ADstico/analisis_estadistico.html 
+- bibliografia.bib = bibliografía usada en el análisis estadístico.
+- datos_brutos.xlsx = datos brutos del experimento desde la expresión percibida tras las PCR en tiempo real hasta el cálculo de las medias de expresión y el cálculo de la expresión relativa de los genes.
+- datos_expresion_brutos.xlsx = datos de la expresión relativa de los genes. Estos son los datos empleados en el análisis estadístico.
+
