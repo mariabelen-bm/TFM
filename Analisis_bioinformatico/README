@@ -5,11 +5,11 @@ El OBJETIVO de este análisis bioinformático es determinar mediante un análisi
 causa variaciones en la microbiota del moco del intestino de la trucha arcoiris, así como en qué medida afecta cada concentración de metionina.
 
 Los archivos que se pueden encontrar en esta carpeta son los siguientes:
-- Archivos_visualización = en este carpeta se encuentran otras carpetas en las cuales se pueden encontrar archivos de visualización interactivos resultantes
-del análisis. En concreto, se cuenta con archivos de visualización del análisis taxonómico realizado (Análisis_taxonómico), del análisis funcional
-y de expresión diferencial (Análisis_funcional_y_expresión_diferencial), del análisis de abundancia diferencial (Análisis_abundancia_diferencial), de 
-estadísticas del análisis bioinformático (Estadísticas) y de los índices de diversidad alfa y beta, así como los resultados de la rarefacción alfa
-(Índices_diversidad_alfa_y_beta).
+- Archivos_visualizacion = en este carpeta se encuentran otras carpetas en las cuales se pueden encontrar archivos de visualización interactivos resultantes
+del análisis. En concreto, se cuenta con archivos de visualización del análisis taxonómico realizado (Analisis_taxonoomico), del análisis funcional
+y de expresión diferencial (Anaalisis_funcional_y_expresioon_diferencial), del analisis de abundancia diferencial (Analisis_abundancia_diferencial), de 
+estadísticas del análisis bioinformático (Estadisticas) y de los índices de diversidad alfa y beta, así como los resultados de la rarefacción alfa
+(Indices_diversidad_alfa_y_beta).
 LOS ARCHIVOS DE VISUALZACIÓN INTERACTIVA SE PUEDEN VER A TRAVÉS DE https://view.qiime2.org/ ARRASTRANDO LOS ARCHIVOS DE VISUALIZACIÓN EN LA PÁGINA.
 - metadata.tsv = es el archivo de metadatos del análisis bioinformático. En él encontramos información de la identificación de las muestras,
 del tratamiento o dieta experimental recibida por cada una de las muestras a la que hace referencia y la dosis de metionina que posee cada tratamiento.
